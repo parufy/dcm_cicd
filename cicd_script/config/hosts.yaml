@@ -1,0 +1,15 @@
+hosts:
+  - name: host1
+    address: 172.21.237.231
+    user: gt_line
+    password: "docomoNW"
+    port: 22
+
+  # VATT / ATT control PC.
+  # Uncomment and set the actual connection information before using
+  # vatt_control defaults or vatt.* operations.
+  - name: vatt_pc
+    address: 172.21.237.231
+    user: gt_line
+    password: "docomoNW"
+    port: 22

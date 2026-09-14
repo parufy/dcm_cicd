@@ -1,0 +1,211 @@
+# ネットワーク試験シナリオ定義ファイル
+#
+# 【実行場所の指定】
+#   params.host 指定なし   → gitlab-runner コンテナ上でローカル実行
+#   params.host: host1     → host1 にSSH接続してリモート実行
+#   params.host:           → 複数ホストを列挙（execution に従い並列/逐次実行）
+#     - host1
+#     - host2
+#
+# 【execution】
+#   sequential（デフォルト）: 前のステップ完了後に順番に実行
+#   parallel               : 連続する parallel ステップを同時実行
+
+# ── ホスト定義 ────────────────────────────────────────────────
+hosts:
+  - name: host1
+    address: 172.21.237.231
+    user: gt-line
+    password: "docomoNW"
+    port: 22
+
+iperf_server:
+  address: 127.0.0.1
+  port: 5201
+
+# ── 試験シナリオ ──────────────────────────────────────────────
+scenarios:
+
+  # 1) 機内モード状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_1.txt"
+
+
+  # 2) 機内モード OFF
+  - name: "機内モード OFF "
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1              # 端末機制御PCにSSH接続してadbを実行
+      mode: "off"              # on / off / status
+      serial: ""               # 省略時は接続中の1台を自動選択
+      wait_after: 3            # 操作後の反映待機秒数
+      adb_path: "adb"          # adb コマンドのパス（フルパス指定も可）
+      output_file: "adb_mode_off_result_2.txt"
+
+  # 3) 機内モードOFF中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_3.txt"
+
+  #wait 3s 
+  - name: "wait 3s"
+    action: wait
+    execution: sequential
+    params:
+      duration: 3
+
+
+  # 4) 機内モード ON
+  - name: "機内モード ON (機内モード試験)"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "on"
+      serial: ""
+      wait_after: 5            # ON は反映に時間がかかるため長めに設定
+      output_file: "adb_mode_on_result_4.txt"
+
+  # 5) 機内モード中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_5.txt"
+
+  #wait 3s 
+  - name: "wait 3s"
+    action: wait
+    execution: sequential
+    params:
+      duration: 3
+
+  # 6) 機内モード OFF
+  - name: "機内モード OFF "
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1              # 端末機制御PCにSSH接続してadbを実行
+      mode: "off"              # on / off / status
+      serial: ""               # 省略時は接続中の1台を自動選択
+      wait_after: 3            # 操作後の反映待機秒数
+      adb_path: "adb"          # adb コマンドのパス（フルパス指定も可）
+      output_file: "adb_mode_off_result_6.txt"
+
+  # 7) 機内モードOFF中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_7.txt"
+
+  #wait 3s 
+  - name: "wait 3s"
+    action: wait
+    execution: sequential
+    params:
+      duration: 3
+
+  # 8) 機内モード ON
+  - name: "機内モード ON (機内モード試験)"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "on"
+      serial: ""
+      wait_after: 5            # ON は反映に時間がかかるため長めに設定
+      output_file: "adb_mode_on_result_8.txt"
+
+  # 9) 機内モード中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_9.txt"
+
+  #wait 3s 
+  - name: "wait 3s"
+    action: wait
+    execution: sequential
+    params:
+      duration: 3
+
+  # 10) 機内モード OFF
+  - name: "機内モード OFF "
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1              # 端末機制御PCにSSH接続してadbを実行
+      mode: "off"              # on / off / status
+      serial: ""               # 省略時は接続中の1台を自動選択
+      wait_after: 3            # 操作後の反映待機秒数
+      adb_path: "adb"          # adb コマンドのパス（フルパス指定も可）
+      output_file: "adb_mode_off_result_10.txt"
+
+  # 11) 機内モードOFF中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_11.txt"
+
+  #wait 3s 
+  - name: "wait 3s"
+    action: wait
+    execution: sequential
+    params:
+      duration: 3
+
+  # 12) 機内モード ON
+  - name: "機内モード ON (機内モード試験)"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "on"
+      serial: ""
+      wait_after: 5            # ON は反映に時間がかかるため長めに設定
+      output_file: "adb_mode_on_result_12.txt"
+
+  # 13) 機内モード中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_13.txt"
+

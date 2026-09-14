@@ -1,0 +1,48 @@
+defaults:
+  common:
+    execution: sequential
+
+  wait:
+    duration: 1
+
+  adb_control:
+    host: host1
+    serial: ""
+    wait_after: 3
+    adb_path: adb
+
+  ping:
+    host: host1
+    target: 127.0.0.1
+    count: 10
+    interval: 1.0
+    timeout: 5
+    adb_serial: ""
+    adb_path: adb
+
+  iperf:
+    host: host1
+    server: 127.0.0.1
+    port: 5201
+    protocol: udp
+    duration: 10
+    parallel: 1
+    direction: ul
+    bandwidth: 1M
+    adb_serial: ""
+    adb_path: adb
+    adb_iperf_path: /data/local/tmp/iperf3
+    server_adb_serial: ""
+    server_adb_iperf_path: /data/local/tmp/iperf3
+    server_startup_wait: 2
+
+  vatt_control:
+    host: vatt_pc
+    mode: status
+    deploy: false
+    remote_dir: "C:\\Users\\GT_line\\vatt_cnt"
+    python_path: python
+    dll_dir: "C:\\Users\\GT_line\\vatt_cnt"
+    serial:
+    test_mode: false
+    timeout: 600

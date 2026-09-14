@@ -1,0 +1,182 @@
+operations:
+  wait.1s:
+    action: wait
+    params:
+      duration: 1
+
+  wait.3s:
+    action: wait
+    params:
+      duration: 3
+
+  wait.10s:
+    action: wait
+    params:
+      duration: 10
+
+  adb.status:
+    action: adb_control
+    params:
+      mode: status
+      wait_after: 0
+
+  adb.airplane_off:
+    action: adb_control
+    params:
+      mode: off
+      wait_after: 3
+
+  adb.airplane_on:
+    action: adb_control
+    params:
+      mode: on
+      wait_after: 5
+
+  ping.localhost_short:
+    action: ping
+    params:
+      count: 3
+
+  ping.localhost_normal:
+    action: ping
+
+  iperf.adb_udp_ul_10s:
+    action: iperf
+    params:
+      duration: 10
+      bandwidth: 1M
+
+  iperf.adb_udp_ul_30s:
+    action: iperf
+    params:
+      duration: 30
+      bandwidth: 1M
+
+  vatt.init:
+    action: vatt_control
+    params:
+      mode: set_all
+      deploy: true
+      attenuation_db: 100.0
+      channels: [1, 2, 3, 4]
+
+  vatt.status:
+    action: vatt_control
+    params:
+      mode: status
+
+  vatt.set_all_20db:
+    action: vatt_control
+    params:
+      mode: set_all
+      attenuation_db: 20.0
+      channels: [1, 2, 3, 4]
+
+  vatt.set_all_diff_att:
+    action: vatt_control
+    params:
+      mode: set_multi
+      settings:
+        - channel: 1
+          attenuation_db: 10.0
+        - channel: 2
+          attenuation_db: 20.0
+        - channel: 3
+          attenuation_db: 30.0
+        - channel: 4
+          attenuation_db: 40.0
+ 
+
+  vatt.ch1_5db:
+    action: vatt_control
+    params:
+      mode: set
+      channel: 1
+      attenuation_db: 5.0
+
+  vatt.ch1_ramp_0_20db:
+    action: vatt_control
+    params:
+      mode: ramp
+      channel: 1
+      start_db: 0.0
+      stop_db: 20.0
+      step_db: 1.0
+      dwell_ms: 1000
+
+  vatt.multi_ramp_ch1-4:
+    action: vatt_control
+    params:
+      mode: ramp_multi
+      ramps:
+        - channel: 1
+          start_db: 0.0
+          stop_db: 100.0
+          step_db: 1.0
+          dwell_ms: 1000
+        - channel: 2
+          start_db: 10.0
+          stop_db: 50.0
+          step_db: 0.5
+          dwell_ms: 1000
+        - channel: 3
+          start_db: 100.0
+          stop_db: 20.0
+          step_db: 1.0
+          dwell_ms: 1000
+        - channel: 4
+          start_db: 30.0
+          stop_db: 80.0
+          step_db: 0.5
+          dwell_ms: 1000
+
+  vatt.multi_ramp_ch1:
+    action: vatt_control
+    params:
+      mode: ramp_multi
+      ramps:
+        - channel: 1
+          start_db: 0.0
+          stop_db: 20.0
+          step_db: 1.0
+          dwell_ms: 1000
+
+  vatt.multi_ramp_ch2:
+    action: vatt_control
+    params:
+      mode: ramp_multi
+      ramps:
+        - channel: 2
+          start_db: 10.0
+          stop_db: 30.0
+          step_db: 1.0
+          dwell_ms: 1000
+
+  vatt.multi_ramp_ch3:
+    action: vatt_control
+    params:
+      mode: ramp_multi
+      ramps:
+        - channel: 3
+          start_db: 20.0
+          stop_db: 40.0
+          step_db: 1.0
+          dwell_ms: 1000
+
+  vatt.multi_ramp_ch4:
+    action: vatt_control
+    params:
+      mode: ramp_multi
+      ramps:
+        - channel: 4
+          start_db: 30.0
+          stop_db: 50.0
+          step_db: 1.0
+          dwell_ms: 1000
+
+  vatt.stop_ramp_ch1-4:
+    action: vatt_control
+    params:
+      mode: stop_ramp_multi
+      deploy: true
+      channels: [1, 2, 3, 4]

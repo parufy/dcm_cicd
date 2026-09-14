@@ -1,0 +1,104 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+    - when: never
+
+stages:
+  - test
+  - deploy
+  - collect
+
+variables:
+  REGISTRY: "172.21.234.62:5050"
+  IMAGE: "$REGISTRY/dcm/cicd_test/cicd_image:1.0"
+  CONTAINER_NAME: "job-$CI_PIPELINE_ID"
+  LOG_DIR: "/data/gitlab/job-logs/$CI_PROJECT_NAME/$CI_PIPELINE_ID"
+
+.default_before_scripts: &default_before_script
+  - unset CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX
+  - unset CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX
+  - unset CI_DEPENDENCY_PROXY_SERVER
+  - unset CI_DEPENDENCY_PROXY_USER
+  - unset CI_DEPENDENCY_PROXY_PAS
+  - export TS=$(TZ=Asia/Tokyo date -d "$CI_PIPELINE_CREATED_AT" +"%Y%m%d_%H%M%S")
+  - mkdir -p "$LOG_DIR/$TS"
+  - mkdir -p artifacts/logs/$TS
+
+  - env | grep -i proxy
+  - echo "$REGISTRY"
+  - echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+  - docker pull "$IMAGE"
+
+
+test_operation:
+  stage: test
+  tags: ["local", "shell"]
+  script:
+    - *default_before_script
+
+    # container boot
+    - docker run -d --name "$CONTAINER_NAME" "$IMAGE" sleep infinity
+
+    # script copy
+    - docker cp "$CI_PROJECT_DIR/cicd_script" "$CONTAINER_NAME:/opt/scripts"
+
+    # perform script
+    - echo $SCENARIO
+    - docker exec "$CONTAINER_NAME" bash -lc "source cicd/venv/bin/activate && cd /opt/scripts && python3 scenario_executor.py -s tests/$SCENARIO"
+
+    # move logs
+    - docker cp "$CONTAINER_NAME":/opt/scripts/test_results "$LOG_DIR/$TS"
+    - docker cp "$CONTAINER_NAME":/opt/scripts/test_results artifacts/logs/$TS
+  
+  artifacts:
+    when: always
+    paths: 
+      - artifacts/logs/
+
+  after_script:
+    # remove container
+    - docker rm -f "$CONTAINER_NAME" || true
+
+pages:
+  stage: deploy
+  tags: ["local", "shell"]
+  needs:
+    - job: test_operation
+  script:
+    - mkdir -p public
+    - cp -r artifacts/logs/$TS/* public
+  artifacts:
+    paths:
+      - public/
+
+
+collect_logs:
+  stage: collect
+  tags: ["local", "shell"]
+  needs: ["pages"]
+  when: always
+  script:
+    - *default_before_script
+
+    # container boot
+    - docker run -d --name "$CONTAINER_NAME" "$IMAGE" sleep infinity
+
+    # script copy
+    - docker cp "$CI_PROJECT_DIR/cicd_script" "$CONTAINER_NAME:/opt/scripts"
+
+    # perform scriipt
+    - docker exec "$CONTAINER_NAME" bash -lc "source cicd/venv/bin/activate && cd /opt/scripts/Getlog && python3 logcollect.py"
+
+    # move logs
+    - docker cp "$CONTAINER_NAME":/root/LOG "$LOG_DIR/$TS"
+      #    - docker cp "$CONTAINER_NAME":/root/LOG artifacts/logs/$TS
+
+      #  artifacts:
+      #    when: always
+      #    paths: 
+      #      - artifacts/logs/
+
+  after_script:
+    # remove container
+    - docker rm -f "$CONTAINER_NAME" || true

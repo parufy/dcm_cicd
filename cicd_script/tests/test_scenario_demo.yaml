@@ -1,0 +1,121 @@
+# ネットワーク試験シナリオ定義ファイル
+#
+# 【実行場所の指定】
+#   params.host 指定なし   → gitlab-runner コンテナ上でローカル実行
+#   params.host: host1     → host1 にSSH接続してリモート実行
+#   params.host:           → 複数ホストを列挙（execution に従い並列/逐次実行）
+#     - host1
+#     - host2
+#
+# 【execution】
+#   sequential（デフォルト）: 前のステップ完了後に順番に実行
+#   parallel               : 連続する parallel ステップを同時実行
+
+# ── ホスト定義 ────────────────────────────────────────────────
+hosts:
+  - name: host1
+    address: 172.21.237.231
+    user: gt-line
+    password: "docomoNW"
+    port: 22
+
+iperf_server:
+  address: 127.0.0.1
+  port: 5201
+
+# ── 試験シナリオ ──────────────────────────────────────────────
+scenarios:
+
+  # 1) host 指定なし → コンテナ上でローカル実行
+  - name: "初期待機 (コンテナ)"
+    action: wait
+    execution: sequential
+    params:
+      duration: 5
+
+  # 2) 機内モード OFF（試験前に確実にOFFにする）
+  #    端末機制御PC（host1）にSSH接続してADBコマンドを実行
+  - name: "機内モード OFF (試験前)"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1              # 端末機制御PCにSSH接続してadbを実行
+      mode: "off"              # on / off / status
+      serial: ""               # 省略時は接続中の1台を自動選択
+      wait_after: 3            # 操作後の反映待機秒数
+      adb_path: "adb"          # adb コマンドのパス（フルパス指定も可）
+      output_file: "adb_mode_off_result_before.txt"
+
+  # 3) 機内モードOFF中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_before.txt"
+
+
+  # 2) 端末から localhost への ping（ADB経由）
+  #    host1（端末機制御PC）にSSH接続し、そこからADB経由で端末にpingを実行させる
+  - name: "端末 → localhost ping (ADB)"
+    action: ping
+    execution: sequential
+    params:
+      host: host1              # 端末機制御PCにSSH接続
+      target: 127.0.0.1
+      count: 10
+      interval: 1.0
+      timeout: 5
+      adb_serial: ""   # ADBシリアル番号（省略時は接続中の1台を自動選択）
+      adb_path: "adb"               # adbのパス（フルパス指定も可）
+      output_file: "ping_adb_result.txt"
+
+  # 3) 端末から localhostへのiperf試験（ADB経由）
+  - name: "端末 → 端末(ocalhost) UDP iperf試験 (ADB)"
+    action: iperf
+    execution: sequential
+    params:
+      host: host1                          # 端末機制御PCにSSH接続
+      server: 127.0.0.1
+      port: 5201
+      protocol: udp
+      duration: 10
+      parallel: 1 
+      direction: ul
+      bandwidth: "1M"
+  # --------------------- client ------------------------
+      adb_serial: ""                        # ADBシリアル番号
+      adb_path: "adb"                      # adbコマンドのパス
+      adb_iperf_path: "/data/local/tmp/iperf3"  # 端末上のiperf3バイナリパス
+  # --------------------- server ------------------------
+      server_adb_iperf_serial: ""
+      server_adb_iperf_path: "/data/local/tmp/iperf3"
+      server_startup_wait: 2
+      output_file: "iperf_adb_result.txt"
+
+
+  # 4) 機内モード ON（機内モード中の挙動試験）
+  - name: "機内モード ON (機内モード試験)"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "on"
+      serial: ""
+      wait_after: 5            # ON は反映に時間がかかるため長めに設定
+      output_file: "adb_mode_on_result_after.txt"
+
+  # 5) 機内モード中の状態確認
+  - name: "機内モード状態確認"
+    action: adb_control
+    execution: sequential
+    params:
+      host: host1
+      mode: "status"             # 現在の状態を取得するだけ
+      serial: ""
+      wait_after: 0
+      output_file: "adb_status_result_after.txt"
+
