@@ -1,5 +1,22 @@
 # U-planeサーバのiperf3自動起動
 
+## hosts.yamlとoperations.yamlを使う構成
+
+`hosts.yaml` の `uplane_server` にSSH管理IP (`address`)、通信先IP (`data_address`)、
+SSHユーザー (`user`)、パスワード (`password`)、SSHポート (`port`) を設定してください。
+`data_address` を省略すると通信先にも `address` を使用します。
+追加したIPとログイン情報はサンプル値です。実環境の値に置き換えてください。
+
+`operations.yaml` に `ping.uplane` と `iperf.uplane_udp_ul` を追加しました。
+`target_host: uplane_server` はping宛先を参照し、`server_host: uplane_server` は
+iperfの通信先とSSH接続情報を参照します。`host: host1` はUE制御PCの指定です。
+参照指定がある場合、ホスト定義から解決した値を使用し、直接指定の `target`、`server`、
+`server_ssh_*` より優先します。直接指定に戻す場合は参照項目を `null` にしてください。
+iperf待ち受けポート、OS、バイナリパスはoperationsのparamsで指定します。
+
+実行例は `tests/test_scenario_uplane.yaml` です。UE_SERIALを実機のシリアルに変更してください。
+この構成では別ファイルの `config.iperf_server` やトップレベル `iperf_server` は不要です。
+
 WindowsまたはLinuxのU-planeサーバへSSH接続し、iperf3の待ち受けを開始してからUEで通信します。
 `server_os: windows` / `server_os: linux` で切り替えます。省略時は従来どおりLinuxです。
 サーバにiperf3を事前配置し、SSHユーザーに実行権限と一時ディレクトリへの書き込み権限を与えてください。
@@ -72,4 +89,28 @@ SSHユーザーには `/tmp` への書き込み権限が必要です。サーバ
 端末間試験では `server_adb_serial` を明示してください（空文字はADB自動選択）。
 
 共通設定は `action_defaults.yaml` の `defaults.iperf` に書けます。
-個別シナリオの `params` が優先されます。トップレベルの `iperf_server` は実行設定には反映されません。
+IP・ログイン情報は `config/iperf_server.yaml` にまとめて設定できます。
+以下のようにシナリオから読み込みます（パスはシナリオファイル基準）。
+
+```yaml
+config:
+  hosts: ../config/hosts.yaml
+  defaults: ../config/action_defaults.yaml
+  operations: ../config/operations.yaml
+  iperf_server: ../config/iperf_server.yaml
+
+scenarios:
+  - name: UEからU-planeへiperf
+    action: iperf
+    params:
+      adb_serial: "UE_SERIAL"
+      duration: 10
+```
+
+同じ内容をシナリオのトップレベル `iperf_server:` に直接記載することもできます。
+トップレベルに記載がある場合は外部ファイルより優先されるため、外部ファイルを使うときは
+既存の `iperf_server:` ブロックを削除してください。
+設定の優先順は `defaults.iperf < iperf_server < operationsのparams < ステップのparams` です。
+既存ステップの `server` / `port` 等が残っている場合は、そちらが優先されます。
+この共通設定はiperf専用です。pingの `target` は別途指定してください。
+サンプルのIPは説明用、ログイン情報はプレースホルダーなので、実環境に合わせて変更してください。

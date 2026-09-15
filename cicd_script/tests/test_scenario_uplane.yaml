@@ -1,0 +1,17 @@
+config:
+  hosts: ../config/hosts.yaml
+  defaults: ../config/action_defaults.yaml
+  operations: ../config/operations.yaml
+
+scenarios:
+  - name: UEからU-planeへping
+    use: ping.uplane
+    params:
+      adb_serial: UE_SERIAL
+      output_file: ping_uplane.json
+
+  - name: UEからU-planeへiperf
+    use: iperf.uplane_udp_ul
+    params:
+      adb_serial: UE_SERIAL
+      output_file: iperf_uplane.json

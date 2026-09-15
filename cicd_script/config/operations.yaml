@@ -1,4 +1,30 @@
 operations:
+  ping.uplane:
+    action: ping
+    params:
+      host: host1
+      target_host: uplane_server
+      adb_serial: ""  # シナリオでUEシリアルを指定（空文字は自動選択）
+      count: 10
+      interval: 1.0
+      timeout: 5
+
+  iperf.uplane_udp_ul:
+    action: iperf
+    params:
+      host: host1
+      server_host: uplane_server
+      adb_serial: ""
+      server_adb_serial: null
+      server_auto_start: true
+      server_os: windows
+      server_iperf_path: 'C:\tools\iperf3\iperf3.exe'
+      port: 5201
+      protocol: udp
+      direction: ul
+      bandwidth: 1M
+      duration: 10
+
   wait.1s:
     action: wait
     params:
@@ -23,13 +49,13 @@ operations:
   adb.airplane_off:
     action: adb_control
     params:
-      mode: off
+      mode: "off"
       wait_after: 3
 
   adb.airplane_on:
     action: adb_control
     params:
-      mode: on
+      mode: "on"
       wait_after: 5
 
   ping.localhost_short:

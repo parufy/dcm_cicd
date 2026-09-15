@@ -1,4 +1,11 @@
 hosts:
+  # Replace example addresses and credentials before running U-plane operations.
+  - name: uplane_server
+    address: 192.0.2.20       # SSH管理IP
+    data_address: 192.0.2.10  # UEからの通信先IP（省略時はaddress）
+    user: CHANGE_ME
+    password: "CHANGE_ME"
+    port: 22                 # SSHポート
   - name: host1
     address: 172.21.237.231
     user: gt_line

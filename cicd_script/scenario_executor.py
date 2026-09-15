@@ -88,6 +88,7 @@ class HostConfig:
     user: str = "root"
     password: str = ""
     port: int = 22
+    data_address: str | None = None
 
 
 @dataclass
@@ -141,6 +142,21 @@ class ScenarioParser:
         hosts_raw  = self._load_config_section(raw, config, "hosts", path.parent, [])
         defaults   = self._load_config_section(raw, config, "defaults", path.parent, {})
         operations = self._load_config_section(raw, config, "operations", path.parent, {})
+        iperf_server = self._load_config_section(raw, config, "iperf_server", path.parent, {}) or {}
+        if not isinstance(iperf_server, dict):
+            raise ValueError("iperf_server must be a mapping")
+        server_keys = {
+            "address": "server", "port": "port", "os": "server_os",
+            "iperf_path": "server_iperf_path", "auto_start": "server_auto_start",
+            "ssh_host": "server_ssh_host", "ssh_user": "server_ssh_user",
+            "ssh_password": "server_ssh_password", "ssh_port": "server_ssh_port",
+            "startup_wait": "server_startup_wait", "adb_serial": "server_adb_serial",
+        }
+        defaults = dict(defaults or {})
+        iperf_defaults = dict(defaults.get("iperf", {}) or {})
+        iperf_defaults.update({dest: iperf_server[key] for key, dest in server_keys.items()
+                               if key in iperf_server})
+        defaults["iperf"] = iperf_defaults
 
         hosts     = self._parse_hosts(hosts_raw)
         scenarios = self._parse_scenarios(
@@ -154,7 +170,7 @@ class ScenarioParser:
         return PipelineConfig(
             hosts=hosts,
             scenarios=scenarios,
-            iperf_server=raw.get("iperf_server", {}),
+            iperf_server=iperf_server,
             log_targets=raw.get("log_targets", []),
         )
 
@@ -255,6 +271,7 @@ class ScenarioParser:
                 user=h.get("user", "root"),
                 password=password,
                 port=int(h.get("port", 22)),
+                data_address=h.get("data_address"),
             )
             hosts[cfg.name] = cfg
         return hosts
@@ -287,6 +304,24 @@ class ScenarioParser:
                 )
 
             params = step.get("params", {})
+            # Named destination references take precedence over literal/default addresses.
+            ref_key = "target_host" if action == "ping" else "server_host"
+            if action in {"ping", "iperf"} and params.get(ref_key):
+                ref = params[ref_key]
+                if not isinstance(ref, str) or ref not in hosts:
+                    raise ValueError(f"{ref_key}: undefined host {ref!r}")
+                destination = hosts[ref]
+                address = destination.data_address or destination.address
+                if action == "ping":
+                    params["target"] = address
+                else:
+                    params.update({
+                        "server": address,
+                        "server_ssh_host": destination.address,
+                        "server_ssh_user": destination.user,
+                        "server_ssh_password": destination.password,
+                        "server_ssh_port": destination.port,
+                    })
 
             # ── params.host を解決してターゲットホストリストを構築 ──
             raw_host = params.get("host")
