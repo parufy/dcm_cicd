@@ -494,6 +494,12 @@ class ActionExecutor:
             cmd += ["--server-adb-serial", str(p["server_adb_serial"])]
         if p.get("server_adb_iperf_path"):
             cmd += ["--server-adb-iperf-path", str(p["server_adb_iperf_path"])]
+        if p.get("server_auto_start"):
+            cmd += ["--server-auto-start"]
+        if p.get("server_os"):
+            cmd += ["--server-os", str(p["server_os"])]
+        if p.get("server_iperf_path"):
+            cmd += ["--server-iperf-path", str(p["server_iperf_path"])]
         if p.get("server_startup_wait") is not None:
             cmd += ["--server-startup-wait", str(p["server_startup_wait"])]
         # サーバ端末の制御PCが別ホストの場合

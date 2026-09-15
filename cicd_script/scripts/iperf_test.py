@@ -26,11 +26,14 @@ iperf3を実行して結果をJSONに保存する。
 """
 
 import argparse
+import base64
 import json
 import logging
+import shlex
 import subprocess
 import sys
 import time
+import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -233,6 +236,91 @@ def _adb_iperf_server(
 
 
 # ─── メイン実行関数 ──────────────────────────────────────────────
+@contextmanager
+def _ssh_iperf_server(run_fn, iperf_bin: str, port: int, startup_wait: int = 2):
+    """Start a Linux server and stop only the process owned by this test."""
+    prefix = f"/tmp/cicd-iperf-{uuid.uuid4().hex}"
+    pidfile, logfile = prefix + ".pid", prefix + ".log"
+    start = (f"{shlex.quote(iperf_bin)} -s -p {port} -D -J "
+             f"--pidfile {pidfile} --logfile {logfile}")
+    check = (f"test -s {pidfile} && "
+             f"kill -0 \"$(cat {pidfile})\" 2>/dev/null")
+    cleanup = (f"if test -s {pidfile}; then "
+               f"kill \"$(cat {pidfile})\" 2>/dev/null || true; fi; "
+               f"rm -f {pidfile} {logfile}")
+    logger.info("Starting U-plane iperf3: %s, port=%s", iperf_bin, port)
+    try:
+        rc, out, err = run_fn(start, 10)
+        if rc != 0:
+            raise RuntimeError(f"U-plane iperf3 server start failed: {err or out}")
+        time.sleep(startup_wait)
+        rc, _, _ = run_fn(check, 10)
+        if rc != 0:
+            _, out, err = run_fn(f"cat {logfile} 2>/dev/null", 10)
+            raise RuntimeError(f"U-plane iperf3 server is not running: {out or err}")
+        yield
+    finally:
+        rc, _, err = run_fn(cleanup, 10)
+        if rc != 0:
+            raise RuntimeError(f"U-plane iperf3 cleanup failed: {err}")
+
+
+def _powershell_command(script: str) -> str:
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    return f"powershell.exe -NoProfile -NonInteractive -EncodedCommand {encoded}"
+
+
+@contextmanager
+def _windows_iperf_server(run_fn, iperf_bin: str, port: int, startup_wait: int = 2):
+    """Manage a Windows server over SSH using a per-test process record."""
+    token = uuid.uuid4().hex
+    binary = "'" + iperf_bin.replace("'", "''") + "'"
+    prelude = (
+        "$ErrorActionPreference = 'Stop'; "
+        f"$iperfState = Join-Path $env:TEMP 'cicd-iperf-{token}.json'; "
+        "$iperfOut = $iperfState + '.out'; $iperfErr = $iperfState + '.err'; "
+    )
+    start = prelude + (
+        f"$iperfBinary = (Get-Command {binary} -CommandType Application -ErrorAction Stop).Source; "
+        f"$iperfProcess = Start-Process -FilePath $iperfBinary -ArgumentList '-s -p {port} -J' "
+        "-WindowStyle Hidden -PassThru -RedirectStandardOutput $iperfOut "
+        "-RedirectStandardError $iperfErr; "
+        "try { @{ Id = $iperfProcess.Id; Started = $iperfProcess.StartTime.ToUniversalTime().Ticks.ToString() } "
+        "| ConvertTo-Json | Set-Content -LiteralPath $iperfState -Encoding UTF8 } "
+        "catch { $iperfProcess | Stop-Process -Force -ErrorAction SilentlyContinue; throw }; "
+    )
+    identity = (
+        "$iperfRecord = Get-Content -LiteralPath $iperfState -Raw | ConvertFrom-Json; "
+        "$iperfProcess = Get-Process -Id $iperfRecord.Id -ErrorAction SilentlyContinue; "
+        "$iperfOwned = $iperfProcess -and "
+        "($iperfProcess.StartTime.ToUniversalTime().Ticks.ToString() -eq $iperfRecord.Started); "
+    )
+    check = prelude + identity + (
+        "if (-not $iperfOwned) { Get-Content -LiteralPath $iperfErr -ErrorAction SilentlyContinue; "
+        "throw 'iperf3 server exited' }; "
+        f"$iperfListener = Get-NetTCPConnection -LocalPort {port} -State Listen "
+        "-ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $iperfRecord.Id }; "
+        "if (-not $iperfListener) { throw 'iperf3 server is not listening' }; "
+    )
+    cleanup = prelude + "if (Test-Path -LiteralPath $iperfState) { " + identity + (
+        "if ($iperfOwned) { $iperfProcess | Stop-Process -Force -ErrorAction Stop }; }; "
+        "foreach ($iperfFile in @($iperfState, $iperfOut, $iperfErr)) { "
+        "if (Test-Path -LiteralPath $iperfFile) { Remove-Item -LiteralPath $iperfFile -Force } }; "
+    )
+    try:
+        for script, delay in ((start, startup_wait), (check, 0)):
+            rc, out, err = run_fn(_powershell_command(script), 15)
+            if rc != 0:
+                raise RuntimeError(f"Windows iperf3 server start/check failed: {err or out}")
+            if delay:
+                time.sleep(delay)
+        yield
+    finally:
+        rc, out, err = run_fn(_powershell_command(cleanup), 15)
+        if rc != 0:
+            raise RuntimeError(f"Windows iperf3 cleanup failed: {err or out}")
+
+
 def run_iperf(
     server: str, port: int, protocol: str,
     duration: int, parallel: int, bandwidth: str | None,
@@ -252,6 +340,9 @@ def run_iperf(
     server_ssh_password: str,
     server_ssh_port: int,
     server_startup_wait: int,          # サーバ起動後の待機秒数
+    server_auto_start: bool = False,
+    server_iperf_path: str = "iperf3",
+    server_os: str = "linux",
 ) -> bool:
     run_timeout      = duration + 60
     use_ssh          = bool(ssh_host)
@@ -300,6 +391,14 @@ def run_iperf(
     )
 
     try:
+        if not 1 <= port <= 65535 or server_startup_wait < 0:
+            raise ValueError("port must be 1..65535 and server_startup_wait must be >= 0")
+        if server_auto_start and (use_server_adb or not server_ssh_host):
+            raise ValueError("server_auto_start requires server_adb_serial: null and server_ssh_host")
+        if server_os not in {"linux", "windows"}:
+            raise ValueError("server_os must be linux or windows")
+        if server_auto_start and not server_iperf_path.strip():
+            raise ValueError("server_iperf_path must not be empty")
         rc     = 1
         stdout = ""
         stderr = ""
@@ -307,8 +406,9 @@ def run_iperf(
         # ── SSH クライアント接続（クライアント側・サーバ側を確立） ──
         # サーバ側制御PCが別ホストの場合は別接続、共用の場合は同一接続を再利用
         srv_ssh_host = server_ssh_host or ssh_host
-        use_srv_ssh  = bool(srv_ssh_host) and use_server_adb
-        shared_ssh   = use_srv_ssh and (srv_ssh_host == ssh_host) and use_ssh
+        use_srv_ssh  = bool(srv_ssh_host) and (use_server_adb or server_auto_start)
+        shared_ssh   = (use_srv_ssh and (srv_ssh_host == ssh_host) and use_ssh
+                        and not server_auto_start)
 
         def _execute(cli_run_fn, srv_run_fn=None):
             """
@@ -335,6 +435,13 @@ def run_iperf(
                 with _adb_iperf_server(
                     _srv_run, adb_path, server_adb_serial,
                     server_adb_iperf_path, port, server_startup_wait,
+                ):
+                    rc, stdout, stderr = cli_run_fn(run_cmd, run_timeout)
+            elif server_auto_start:
+                server_context = (_windows_iperf_server if server_os == "windows"
+                                  else _ssh_iperf_server)
+                with server_context(
+                    _srv_run, server_iperf_path, port, server_startup_wait,
                 ):
                     rc, stdout, stderr = cli_run_fn(run_cmd, run_timeout)
             else:
@@ -389,6 +496,10 @@ def run_iperf(
             "duration":            duration,
             "parallel":            parallel, "bandwidth_target": bandwidth,
             "server_adb_serial":   server_adb_serial,
+            "server_auto_start":   server_auto_start,
+            "server_os":           server_os,
+            "server_iperf_path":   server_iperf_path,
+            "server_ssh_host":     server_ssh_host,
             "returncode":          rc,
             "client_metrics":      client_metrics,
             "server_metrics":      server_metrics,
@@ -440,6 +551,12 @@ def main():
                         help="サーバ端末のADBシリアル番号 (指定時=この端末でiperf3 -s を起動)")
     parser.add_argument("--server-adb-iperf-path", default=ADB_IPERF3_DEFAULT,
                         help=f"サーバ端末上の iperf3 バイナリパス (デフォルト: {ADB_IPERF3_DEFAULT})")
+    parser.add_argument("--server-auto-start", action="store_true",
+                        help="Start/stop iperf3 on a U-plane server via SSH")
+    parser.add_argument("--server-os", choices=["linux", "windows"], default="linux",
+                        help="U-plane server OS (default: linux)")
+    parser.add_argument("--server-iperf-path", default="iperf3",
+                        help="iperf3 binary path on the U-plane server")
     parser.add_argument("--server-ssh-host",       default=None,
                         help="サーバ端末の制御PC (省略時は --ssh-host と共用)")
     parser.add_argument("--server-ssh-user",       default="root")
@@ -473,6 +590,9 @@ def main():
         server_ssh_password=args.server_ssh_password,
         server_ssh_port=args.server_ssh_port,
         server_startup_wait=args.server_startup_wait,
+        server_auto_start=args.server_auto_start,
+        server_iperf_path=args.server_iperf_path,
+        server_os=args.server_os,
     )
     sys.exit(0 if success else 1)
 

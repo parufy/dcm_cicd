@@ -32,7 +32,10 @@ defaults:
     adb_serial: ""
     adb_path: adb
     adb_iperf_path: /data/local/tmp/iperf3
-    server_adb_serial: ""
+    server_adb_serial: null
+    server_auto_start: false
+    server_os: linux  # windowsの場合はserver_iperf_pathもexeのパスに変更
+    server_iperf_path: /usr/bin/iperf3
     server_adb_iperf_path: /data/local/tmp/iperf3
     server_startup_wait: 2
 
